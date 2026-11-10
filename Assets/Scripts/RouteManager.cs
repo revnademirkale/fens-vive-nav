@@ -1,26 +1,25 @@
+using System;
 using UnityEngine;
 
-// Which of the two FENS floor-2 routes is active
-public enum RouteId { A_West, B_East }
-
-// Experimental condition: line on the floor + sound, or sound only
-public enum NavCondition { Visual, AudioOnly }
-
 /// <summary>
-/// Sets up one navigation trial on FENS floor 2:
-/// - draws the route as a line on the floor (Visual condition only)
-/// - moves the target sound to the end of the route
-/// - places the player (XR Origin) at the start, facing the first corridor
-/// - logs the completion time when the player reaches the target
-/// Change Route / Condition in the Inspector; the line updates in the Scene view.
+/// Shows one navigation target on FENS floor 2 (original version by Revna; extended for 4 conditions):
+/// - draws the path as a line on the floor (VisualOnly / AudioVisual)
+/// - moves the target sound to the end of the path and plays it (AudioOnly / AudioVisual)
+/// - detects when the participant's head reaches the target and raises <see cref="Arrived"/>
+/// The ExperimentController decides which target/condition is active and when a trial runs.
+/// Outside Play mode the "Editor preview" fields control what is drawn in the Scene view.
 /// </summary>
 [ExecuteAlways]
 [RequireComponent(typeof(LineRenderer))]
 public class RouteManager : MonoBehaviour
 {
-    [Header("Experiment settings")]
-    public RouteId route = RouteId.A_West;
-    public NavCondition condition = NavCondition.Visual;
+    [Header("Targets")]
+    [Tooltip("TargetSet asset with the warm-up + 4 targets")]
+    public TargetSet targetSet;
+
+    [Header("Editor preview (Scene view only, not used in Play mode)")]
+    public int previewTarget = 0;
+    public NavCondition previewCondition = NavCondition.VisualOnly;
 
     [Header("Scene references")]
     [Tooltip("XR Origin (XR Rig)")]
@@ -41,50 +40,99 @@ public class RouteManager : MonoBehaviour
     public Color lineColor = new Color(0.35f, 0.45f, 0.6f);
     public float lineWidth = 0.15f;
 
-    // Corner points on the floor as (X, Z) in Unity world coordinates.
-    // First point = start (top of the stairs), last point = target.
-    static readonly Vector2[] RouteA =
-    {
-        new Vector2(-7.2f, -3.8f), new Vector2(-7.2f, 0.2f), new Vector2(-29.7f, 0.2f),
-        new Vector2(-29.7f, -30.3f), new Vector2(-15f, -30.3f)
-    };
-    static readonly Vector2[] RouteB =
-    {
-        new Vector2(-7.2f, -3.8f), new Vector2(-7.2f, 0.2f), new Vector2(24.5f, 0.2f),
-        new Vector2(24.5f, -30.3f), new Vector2(17f, -30.3f)
-    };
+    /// Raised once per trial, the first frame the head is within reachRadius of the target.
+    public event Action Arrived;
 
     LineRenderer line;
-    float startTime;
-    bool finished;
+    TargetDef current;
+    NavCondition currentCondition;
+    bool trialRunning;
+    bool arrived;
 
-    Vector2[] Corners => route == RouteId.A_West ? RouteA : RouteB;
-    Vector2 Target => Corners[Corners.Length - 1];
+    public bool HasArrived => arrived;
 
-    void OnEnable() => Apply();
-
-    void Start()
+    void OnEnable()
     {
-        if (!Application.isPlaying) return;
-        Apply();
-        PlacePlayer();
-        startTime = Time.time;
-        finished = false;
-        Debug.Log($"[RouteManager] Trial started. Route {route}, condition {condition}");
+        if (Application.isPlaying)
+        {
+            // Nothing is shown and nothing plays until a trial starts
+            SetupLine();
+            line.enabled = false;
+            StopSound();
+        }
+        else
+        {
+            ApplyPreview();
+        }
     }
 
     void Update()
     {
         if (!Application.isPlaying)
         {
-            Apply(); // keep the Scene view preview up to date while editing
+            ApplyPreview(); // keep the Scene view preview up to date while editing
             return;
         }
         CheckTargetReached();
     }
 
-    /// Draws the line and moves the target sound according to the current settings.
-    public void Apply()
+    // ---------------------------------------------------------------- trial control (called by ExperimentController)
+
+    /// Draws the line / places + plays the sound for this target and condition, and starts arrival detection.
+    public void BeginTrial(TargetDef target, NavCondition condition)
+    {
+        current = target;
+        currentCondition = condition;
+        arrived = false;
+        trialRunning = target != null && target.IsValid;
+        if (!trialRunning)
+        {
+            Debug.LogWarning("[RouteManager] Target has fewer than 2 path points; nothing to show.");
+            return;
+        }
+
+        DrawPath(target);
+        line.enabled = condition.ShowsLine();
+        PlaceSound(target);
+        if (condition.PlaysSound()) PlaySound(); else StopSound();
+    }
+
+    /// Hides the line, stops the sound, stops arrival detection.
+    public void EndTrial()
+    {
+        trialRunning = false;
+        if (line != null) line.enabled = false;
+        StopSound();
+    }
+
+    /// Moves the XR Origin so that the participant's HEAD is at the target's start point,
+    /// looking in the start direction. Only horizontal position and yaw change; the origin stays on the floor.
+    /// (Temporary stand-in until WorldAlignment is written.)
+    public void PlacePlayerAtStart(TargetDef target)
+    {
+        if (xrOrigin == null || playerHead == null || target == null || !target.IsValid) return;
+
+        // CharacterController overrides direct position changes, so pause it briefly
+        var cc = xrOrigin.GetComponent<CharacterController>();
+        bool ccWasEnabled = cc != null && cc.enabled;
+        if (ccWasEnabled) cc.enabled = false;
+
+        // 1) turn the rig around the head so the head looks in the start direction
+        float yawDelta = Mathf.DeltaAngle(playerHead.eulerAngles.y, target.startYaw);
+        xrOrigin.RotateAround(playerHead.position, Vector3.up, yawDelta);
+
+        // 2) slide the rig so the head is above the start point, rig on the floor
+        Vector3 head = playerHead.position;
+        Vector3 p = xrOrigin.position + new Vector3(target.Start.x - head.x, 0f, target.Start.z - head.z);
+        p.y = floorY;
+        xrOrigin.position = p;
+
+        if (ccWasEnabled) cc.enabled = true;
+    }
+
+    // ---------------------------------------------------------------- drawing
+
+    void SetupLine()
     {
         if (line == null) line = GetComponent<LineRenderer>();
 
@@ -92,12 +140,8 @@ public class RouteManager : MonoBehaviour
         var flat = Quaternion.Euler(90f, 0f, 0f);
         if (transform.rotation != flat) transform.rotation = flat;
 
-        var c = Corners;
         line.useWorldSpace = true;
         line.alignment = LineAlignment.TransformZ;
-        line.positionCount = c.Length;
-        for (int i = 0; i < c.Length; i++)
-            line.SetPosition(i, new Vector3(c[i].x, floorY + lineHeight, c[i].y));
         line.startWidth = line.endWidth = lineWidth;
         line.numCornerVertices = 4;
         line.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
@@ -115,61 +159,94 @@ public class RouteManager : MonoBehaviour
         var mat = line.sharedMaterial;
         if (mat.HasProperty("_BaseColor")) mat.SetColor("_BaseColor", lineColor);
         if (mat.HasProperty("_Color")) mat.SetColor("_Color", lineColor);
-
-        // Visual condition shows the line; audio-only hides it
-        line.enabled = condition == NavCondition.Visual;
-
-        if (targetSound != null)
-        {
-            var p = new Vector3(Target.x, floorY + soundHeight, Target.y);
-            if (targetSound.position != p) targetSound.position = p;
-        }
     }
 
-    /// Puts the player at the start of the route, facing the first corridor.
-    void PlacePlayer()
+    void DrawPath(TargetDef t)
     {
-        if (xrOrigin == null) return;
-        var c = Corners;
-        Vector2 dir = c[1] - c[0];
-        float yaw = Mathf.Atan2(dir.x, dir.y) * Mathf.Rad2Deg;
-
-        // CharacterController overrides direct position changes, so pause it briefly
-        var cc = xrOrigin.GetComponent<CharacterController>();
-        if (cc != null) cc.enabled = false;
-        xrOrigin.SetPositionAndRotation(new Vector3(c[0].x, floorY, c[0].y), Quaternion.Euler(0f, yaw, 0f));
-        if (cc != null) cc.enabled = true;
+        SetupLine();
+        line.positionCount = t.path.Count;
+        for (int i = 0; i < t.path.Count; i++)
+            line.SetPosition(i, new Vector3(t.path[i].x, floorY + lineHeight, t.path[i].z));
     }
+
+    void PlaceSound(TargetDef t)
+    {
+        if (targetSound == null) return;
+        var p = new Vector3(t.Target.x, floorY + soundHeight, t.Target.z);
+        if (targetSound.position != p) targetSound.position = p;
+    }
+
+    void PlaySound()
+    {
+        var src = targetSound != null ? targetSound.GetComponent<AudioSource>() : null;
+        if (src != null && !src.isPlaying) src.Play();
+    }
+
+    void StopSound()
+    {
+        var src = targetSound != null ? targetSound.GetComponent<AudioSource>() : null;
+        if (src != null) src.Stop();
+    }
+
+    /// Edit mode: show the preview target so the path can be checked in the Scene view.
+    void ApplyPreview()
+    {
+        SetupLine();
+        var t = targetSet != null ? targetSet.Get(previewTarget) : null;
+        if (t == null || !t.IsValid)
+        {
+            line.positionCount = 0;
+            return;
+        }
+        DrawPath(t);
+        line.enabled = previewCondition.ShowsLine();
+        PlaceSound(t);
+    }
+
+    // ---------------------------------------------------------------- arrival
 
     void CheckTargetReached()
     {
-        if (finished || playerHead == null) return;
+        if (!trialRunning || arrived || playerHead == null || current == null) return;
         var head = new Vector2(playerHead.position.x, playerHead.position.z);
-        if (Vector2.Distance(head, Target) > reachRadius) return;
+        var target = new Vector2(current.Target.x, current.Target.z);
+        if (Vector2.Distance(head, target) > reachRadius) return;
 
-        finished = true;
-        float duration = Time.time - startTime;
-        Debug.Log($"[RouteManager] Target reached. Route {route}, condition {condition}, time {duration:F1} s");
-
-        if (targetSound != null)
-        {
-            var src = targetSound.GetComponent<AudioSource>();
-            if (src != null) src.Stop();
-        }
+        arrived = true;
+        StopSound(); // as in the original version: the sound stops when the target is reached
+        Arrived?.Invoke();
     }
 
-    // Shows the route in the Scene view even in the audio-only condition (not visible in VR)
+    // ---------------------------------------------------------------- Scene view gizmos (never visible in the headset)
+
     void OnDrawGizmos()
     {
-        var c = Corners;
-        Gizmos.color = Color.yellow;
-        for (int i = 0; i < c.Length; i++)
+        if (targetSet == null) return;
+        for (int k = 0; k < targetSet.Count; k++)
         {
-            var p = new Vector3(c[i].x, floorY + 0.1f, c[i].y);
-            Gizmos.DrawSphere(p, 0.3f);
-            if (i > 0) Gizmos.DrawLine(new Vector3(c[i - 1].x, floorY + 0.1f, c[i - 1].y), p);
+            var t = targetSet.targets[k];
+            if (t == null || !t.IsValid) continue;
+            bool selected = Application.isPlaying ? t == current : k == previewTarget;
+            float y = floorY + 0.1f;
+
+            Gizmos.color = selected ? Color.yellow : new Color(1f, 1f, 0f, 0.25f);
+            for (int i = 0; i < t.path.Count; i++)
+            {
+                var p = new Vector3(t.path[i].x, y, t.path[i].z);
+                if (selected) Gizmos.DrawSphere(p, 0.3f);
+                if (i > 0) Gizmos.DrawLine(new Vector3(t.path[i - 1].x, y, t.path[i - 1].z), p);
+            }
+
+            // start point + facing direction (green)
+            var s = new Vector3(t.Start.x, y, t.Start.z);
+            var dir = Quaternion.Euler(0f, t.startYaw, 0f) * Vector3.forward;
+            Gizmos.color = selected ? Color.green : new Color(0f, 1f, 0f, 0.25f);
+            Gizmos.DrawWireSphere(s, 0.4f);
+            Gizmos.DrawLine(s, s + dir * 1.5f);
+
+            // arrival radius (red)
+            Gizmos.color = selected ? Color.red : new Color(1f, 0f, 0f, 0.25f);
+            Gizmos.DrawWireSphere(new Vector3(t.Target.x, y, t.Target.z), reachRadius);
         }
-        Gizmos.color = Color.red;
-        Gizmos.DrawWireSphere(new Vector3(Target.x, floorY + 0.1f, Target.y), reachRadius);
     }
 }
