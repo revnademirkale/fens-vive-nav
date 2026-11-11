@@ -106,6 +106,9 @@ public static partial class FensExperimentSetup
         // 5) Step 2: model colliders + visibility, audio, alignment, passthrough
         SetupStep2(rm, exp, logger, feedback, log);
 
+        // 6) Step 3: controller buttons for the operator, controller visuals hidden
+        SetupControllers(rm, exp, log);
+
         EditorSceneManager.MarkSceneDirty(expGo.scene);
         Selection.activeGameObject = expGo;
 

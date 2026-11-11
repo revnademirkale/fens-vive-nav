@@ -942,6 +942,16 @@ MonoBehaviour:
   startStopKey: 2
   alignKey: 35
   modelViewKey: 20
+  useController: 1
+  holdSeconds: 1
+  ignoreOtherControllerButtonsDuringTrial: 1
+  nextTargetBinding: <XRController>{RightHand}/{PrimaryButton}
+  previousTargetBinding: <XRController>{RightHand}/{SecondaryButton}
+  nextConditionBinding: <XRController>{LeftHand}/{PrimaryButton}
+  previousConditionBinding: <XRController>{LeftHand}/{SecondaryButton}
+  modelViewBinding: <XRController>{LeftHand}/{GripButton}
+  alignBinding: <XRController>{LeftHand}/{TriggerButton}
+  startStopBinding: <XRController>{RightHand}/{TriggerButton}
 --- !u!114 &1722775764
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1053,7 +1063,7 @@ Light:
   m_BounceIntensity: 1
   m_ColorTemperature: 6570
   m_UseColorTemperature: 0
-  m_BoundingSphereOverride: {x: 0, y: 0, z: 0, w: 0}
+  m_BoundingSphereOverride: {x: 0, y: 1e-45, z: 2.3157239e-36, w: 255.79382}
   m_UseBoundingSphereOverride: 0
   m_UseViewFrustumForShadowCasterCull: 1
   m_ShadowRadius: 0
@@ -2671,6 +2681,9 @@ PrefabInstance:
     - targetCorrespondingSourceObject: {fileID: 8298045291338814966, guid: 77e7c27b2c5525e4aa8cc9f99d654486, type: 3}
       insertIndex: -1
       addedObject: {fileID: 2779669268269126906}
+    - targetCorrespondingSourceObject: {fileID: 8298045291338814966, guid: 77e7c27b2c5525e4aa8cc9f99d654486, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 2779669268269126915}
     - targetCorrespondingSourceObject: {fileID: 7277802327414017194, guid: 77e7c27b2c5525e4aa8cc9f99d654486, type: 3}
       insertIndex: -1
       addedObject: {fileID: 2779669268269126905}
@@ -2775,6 +2788,24 @@ MonoBehaviour:
   xrOrigin: {fileID: 2779669268269126899}
   head: {fileID: 2779669268269126898}
   floorY: 7.86
+--- !u!114 &2779669268269126915
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2779669268269126900}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 39f5490de8e6744ba90482747a4217ef, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  showControllerVisuals: 0
+  disableXRInteractors: 1
+  controllerRoots: []
+  alsoHideNamesStartingWith:
+  - Affordance Callouts
+  - Poke Point Affordances
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0
