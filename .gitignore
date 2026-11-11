@@ -34,3 +34,7 @@ crashlytics-build.properties
 sysinfo.txt
 /[Aa]ssets/[Ss]treamingAssets/aa.meta
 /[Aa]ssets/[Ss]treamingAssets/aa/*
+
+# Unity / Mono generated in project root
+/*_BurstDebugInformation_DoNotShip/
+/mono_crash.*.json

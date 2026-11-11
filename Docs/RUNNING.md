@@ -33,18 +33,41 @@ Klavye operatörün elindedir.
    [doğrulandı] [Unity: Git dependencies](https://docs.unity3d.com/2022.3/Documentation/Manual/upm-git.html)
    Git'i **Unity'yi açmadan önce** kurun. Unity Hub açıksa kapatıp yeniden açın. Yeniden açmanın gerekli olup
    olmadığı resmi dokümanda yok [doğrulanmadı], ama zararı yok.
-3. **Unity Hub + Unity 2022.3.40f1:**
+3. **Git LFS (şart):** VIVE paketindeki Android kütüphaneleri (`openxr_loader.aar`, `libopenxr_loader.so`,
+   `libviveopenxr.so`) ve kumanda modelleri GitHub'da **Git LFS** ile saklanıyor.
+   - Git LFS yoksa Unity hata vermez. Bu dosyaların yerine ~130 baytlık "pointer" metin dosyaları indirir.
+     [doğrulandı] [Unity: Git dependencies](https://docs.unity3d.com/2022.3/Documentation/Manual/upm-git.html)
+   - Mac'te bu yüzden Android build şu hatayla düştü: `zip END header not found` [proje].
+   - Git LFS, Git for Windows ile birlikte gelir.
+     [doğrulandı] [git-lfs README](https://github.com/git-lfs/git-lfs#installing)
+     Kurulumdaki bileşen listesinde "Git LFS (Large File Support)" işaretli kalsın. Bileşenin adı sürüme göre
+     değişebilir [doğrulanmadı].
+   - Kurulumdan sonra komut satırında (cmd veya Git Bash) şu iki komutu çalıştırın:
+     ```
+     git lfs version
+     git lfs install
+     ```
+     Birincisi bir sürüm yazmalı (ör. `git-lfs/3.x.x`). `git: 'lfs' is not a git command` yazıyorsa LFS kurulu
+     değildir. İkincisi `Git LFS initialized.` yazmalı. Bunu kullanıcı hesabı başına bir kez yapmak yeterli.
+     [doğrulandı] [git lfs install](https://github.com/git-lfs/git-lfs/blob/main/docs/man/git-lfs-install.adoc)
+   - Bunu da **Unity'yi açmadan önce** yapın. Proje LFS'siz açıldıysa, pointer dosyalar
+     `Library/PackageCache/com.htc.upm.vive.openxr@…` klasöründe kalır ve Unity onları kendiliğinden yenilemez.
+     Çözüm: Unity'yi kapatın, o klasörü proje dışına taşıyın (silmeyin), Unity'yi yeniden açın.
+     Unity paketi yeniden indirir [proje; Mac'te denenecek].
+   - Kontrol: `Library/PackageCache/com.htc.upm.vive.openxr@…/Runtime/Android/openxr_loader.aar` yaklaşık
+     **1,6 MB** olmalı (1 599 568 bayt). 1 KB'tan küçükse hâlâ pointer'dır [proje].
+4. **Unity Hub + Unity 2022.3.40f1:**
    - Unity Hub'ı kurun.
    - Hub → **Installs** → **Install Editor** → **Archive** sekmesi → **download archive** → açılan sayfada
      2022.3.40f1'i bulup **Install** (Unity Hub) linkine tıklayın. Sürüm tam olarak **2022.3.40f1** olmalı.
    - [doğrulandı] [Unity Hub: Add editor](https://docs.unity.com/en-us/hub/add-editor), [Unity arşivi](https://unity.com/releases/editor/archive)
-4. **SteamVR:** Steam üzerinden kurun ve bir kez açın.
+5. **SteamVR:** Steam üzerinden kurun ve bir kez açın.
    [doğrulandı] [PC'yi streaming'e hazırlama](https://www.vive.com/us/support/vs/category_howto/preparing-your-computer-for-streaming.html)
-5. **VIVE Hub:** Aynı sayfadaki linkten kurun.
+6. **VIVE Hub:** Aynı sayfadaki linkten kurun.
    - Aynı sayfa PC'nin router'a **Ethernet kablosuyla** bağlanmasını ister.
    - NVIDIA kartta "Prefer maximum performance" seçilmesini de ister.
    - [doğrulandı] (aynı link)
-6. **SteamVR'ı OpenXR runtime yapın:**
+7. **SteamVR'ı OpenXR runtime yapın:**
    - HTC'nin destek sayfası: SteamVR → **Settings** → **Advanced Settings: Show** → **Developer** →
      **SET STEAMVR AS OPENXR RUNTIME**.
    - HTC'nin Direct Preview sayfası yolu SteamVR → **Settings** → **OpenXR** olarak veriyor. SteamVR sürümüne göre yer
@@ -65,6 +88,7 @@ Klavye operatörün elindedir.
 4. Projeye tıklayın. **İlk açılış uzun sürer** (paketler indirilir, `Library` klasörü oluşur). Bekleyin.
 5. Console'da (Window → General → Console) git veya `com.htc.upm.vive.openxr` ile ilgili kırmızı hata varsa,
    git kurulu değildir ya da PATH'te değildir. 1.1'deki 2. adıma dönün.
+   Git LFS kontrolü için 1.1'deki 3. adımın sonundaki boyut kontrolünü yapın (`openxr_loader.aar` ≈ 1,6 MB).
 
 Daha sonra güncellemek için proje klasöründe: `git pull` [proje].
 
@@ -335,4 +359,6 @@ Android / git:
 - Android API seviyeleri: https://developer.android.com/tools/releases/platforms
 - uses-sdk (minSdkVersion): https://developer.android.com/guide/topics/manifest/uses-sdk-element
 - Git for Windows: https://git-scm.com/install/windows
+- Git LFS (kurulum, Git for Windows'ta dahil): https://github.com/git-lfs/git-lfs#installing
+- git lfs install: https://github.com/git-lfs/git-lfs/blob/main/docs/man/git-lfs-install.adoc
 - git clone: https://git-scm.com/docs/git-clone

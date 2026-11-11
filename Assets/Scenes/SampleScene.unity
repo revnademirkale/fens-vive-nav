@@ -268,7 +268,7 @@ Material:
     - _ZWrite: 1
     m_Colors:
     - _BaseColor: {r: 0.35, g: 0.45, b: 0.6, a: 1}
-    - _Color: {r: 0.35, g: 0.45, b: 0.6, a: 1}
+    - _Color: {r: 0.34999996, g: 0.45, b: 0.6, a: 1}
   m_BuildTextureStacks: []
 --- !u!1 &971917106
 GameObject:
@@ -1063,7 +1063,7 @@ Light:
   m_BounceIntensity: 1
   m_ColorTemperature: 6570
   m_UseColorTemperature: 0
-  m_BoundingSphereOverride: {x: 0, y: 1e-45, z: 2.3157239e-36, w: 255.79382}
+  m_BoundingSphereOverride: {x: 0, y: -9.1835e-41, z: 0, w: 0}
   m_UseBoundingSphereOverride: 0
   m_UseViewFrustumForShadowCasterCull: 1
   m_ShadowRadius: 0
