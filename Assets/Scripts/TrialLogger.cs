@@ -9,7 +9,8 @@ using UnityEngine;
 /// Writes one CSV file per trial (one row per frame) and one summary CSV per participant (one row per trial).
 /// Folder: Application.persistentDataPath/FENS_logs/&lt;participantId&gt;/
 /// Idea and columns adapted from dataLogging.cs in the original HoloLens 2 project.
-/// Extra columns (e.g. eye tracking later) come from ILogColumnProvider components on this GameObject.
+/// Extra columns (e.g. eye tracking later) come from ILogColumnProvider components on this GameObject
+/// or listed in "Extra Column Sources". Alignments are written to &lt;participantId&gt;_alignment.csv.
 /// </summary>
 public class TrialLogger : MonoBehaviour
 {
@@ -23,6 +24,9 @@ public class TrialLogger : MonoBehaviour
     [Tooltip("Seconds between writes to disk, so data survives a crash")]
     public float flushInterval = 1f;
 
+    [Tooltip("Other components that add columns (must implement ILogColumnProvider), e.g. RearAttenuation")]
+    public List<MonoBehaviour> extraColumnSources = new List<MonoBehaviour>();
+
     public const string RootFolderName = "FENS_logs";
     static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
 
@@ -31,7 +35,7 @@ public class TrialLogger : MonoBehaviour
     readonly List<ILogColumnProvider> extraColumns = new List<ILogColumnProvider>();
 
     // current trial
-    string participantId, targetId, condition;
+    string participantId, targetId, condition, alignedTo;
     int trialNumber;
     double trialStartTime;
     long trialStartUnixMs;
@@ -51,6 +55,8 @@ public class TrialLogger : MonoBehaviour
     {
         foreach (var mb in GetComponents<MonoBehaviour>())
             if (mb is ILogColumnProvider p) extraColumns.Add(p);
+        foreach (var mb in extraColumnSources)
+            if (mb is ILogColumnProvider p && !extraColumns.Contains(p)) extraColumns.Add(p);
     }
 
     void Start()
@@ -60,7 +66,7 @@ public class TrialLogger : MonoBehaviour
 
     // ---------------------------------------------------------------- trial lifetime
 
-    public void BeginTrial(string participant, int trial, string target, NavCondition cond)
+    public void BeginTrial(string participant, int trial, string target, NavCondition cond, string alignedToTarget = "")
     {
         if (writer != null) EndTrial(false, "replaced by new trial");
 
@@ -68,6 +74,7 @@ public class TrialLogger : MonoBehaviour
         trialNumber = trial;
         targetId = Sanitize(target);
         condition = cond.ToString();
+        alignedTo = string.IsNullOrEmpty(alignedToTarget) ? "none" : Sanitize(alignedToTarget);
         trialStartTime = Time.timeAsDouble;
         trialStartUnixMs = DateTimeOffset.Now.ToUnixTimeMilliseconds();
         arrivalTime = -1;
@@ -187,7 +194,7 @@ public class TrialLogger : MonoBehaviour
         {
             if (isNew)
                 w.WriteLine("participant_id,trial,target,condition,start_unix_ms,reached,arrival_time_s," +
-                            "duration_s,stopped_by_operator,frames,invalid_frames,file,note");
+                            "duration_s,stopped_by_operator,frames,invalid_frames,file,note,aligned_to");
             w.WriteLine(string.Join(",",
                 participantId, trialNumber.ToString(Inv), targetId, condition,
                 trialStartUnixMs.ToString(Inv),
@@ -197,8 +204,39 @@ public class TrialLogger : MonoBehaviour
                 stoppedByOperator ? "1" : "0",
                 frameCount.ToString(Inv), invalidFrames.ToString(Inv),
                 Path.GetFileName(currentFilePath),
-                Sanitize(note)));
+                Sanitize(note),
+                alignedTo));
         }
+    }
+
+    // ---------------------------------------------------------------- alignment file
+
+    /// One row per alignment: when, to which target's start, and how much the XR Origin was turned / moved.
+    public void LogAlignment(string participant, int alignmentNumber, WorldAlignment.Result r)
+    {
+        string pid = Sanitize(participant);
+        string folder = Path.Combine(RootFolder, pid);
+        Directory.CreateDirectory(folder);
+        string path = Path.Combine(folder, $"{pid}_alignment.csv");
+        bool isNew = !File.Exists(path);
+        using (var w = new StreamWriter(path, true, new UTF8Encoding(false)))
+        {
+            if (isNew)
+                w.WriteLine("participant_id,alignment,time_unix_ms,time_app_s,target,start_x,start_z,start_yaw_deg," +
+                            "head_before_x,head_before_y,head_before_z,head_yaw_before_deg," +
+                            "rotation_applied_deg,translation_x,translation_y,translation_z," +
+                            "origin_after_x,origin_after_y,origin_after_z,origin_yaw_after_deg," +
+                            "head_after_x,head_after_y,head_after_z");
+            w.WriteLine(string.Join(",",
+                pid, alignmentNumber.ToString(Inv),
+                DateTimeOffset.Now.ToUnixTimeMilliseconds().ToString(Inv), F(Time.timeAsDouble),
+                Sanitize(r.targetId), F(r.startPoint.x), F(r.startPoint.z), F(r.startYaw),
+                F(r.headBefore.x), F(r.headBefore.y), F(r.headBefore.z), F(r.headYawBefore),
+                F(r.rotationDeg), F(r.translation.x), F(r.translation.y), F(r.translation.z),
+                F(r.originAfter.x), F(r.originAfter.y), F(r.originAfter.z), F(r.originYawAfter),
+                F(r.headAfter.x), F(r.headAfter.y), F(r.headAfter.z)));
+        }
+        Debug.Log($"[TrialLogger] Alignment {alignmentNumber} written to {path}");
     }
 
     // ---------------------------------------------------------------- helpers

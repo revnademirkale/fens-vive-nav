@@ -17,6 +17,8 @@ public class OperatorInput : MonoBehaviour
     public Key previousConditionKey = Key.O;
     public Key nextConditionKey = Key.P;
     public Key startStopKey = Key.Enter;
+    public Key alignKey = Key.U;
+    public Key modelViewKey = Key.F;
 
     void Update()
     {
@@ -35,11 +37,14 @@ public class OperatorInput : MonoBehaviour
         if (kb[previousConditionKey].wasPressedThisFrame) experiment.PreviousCondition();
         if (kb[nextConditionKey].wasPressedThisFrame) experiment.NextCondition();
         if (kb[startStopKey].wasPressedThisFrame || kb[Key.NumpadEnter].wasPressedThisFrame) experiment.ToggleTrial();
+        if (kb[alignKey].wasPressedThisFrame) experiment.Align();
+        if (kb[modelViewKey].wasPressedThisFrame) experiment.CycleModelView();
     }
 
     void PollController()
     {
         // TODO (step B, standalone headset): read the VIVE controller buttons here and call the same
-        // experiment methods (PreviousTarget / NextTarget / PreviousCondition / NextCondition / ToggleTrial).
+        // experiment methods (PreviousTarget / NextTarget / PreviousCondition / NextCondition / ToggleTrial /
+        // Align / CycleModelView).
     }
 }

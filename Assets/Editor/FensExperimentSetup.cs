@@ -6,11 +6,12 @@ using UnityEngine;
 
 /// <summary>
 /// Menu: FENS > Setup Experiment Scene
-/// Adds and connects the experiment objects in the open scene. Safe to run more than once:
+/// Adds and connects the experiment objects in the open scene (step 1 here, audio / model /
+/// alignment / passthrough in FensExperimentSetup.Step2.cs). Safe to run more than once:
 /// existing objects and an existing TargetSet asset are kept, only missing pieces are added.
 /// Everything is recorded with Undo (Cmd+Z reverts it).
 /// </summary>
-public static class FensExperimentSetup
+public static partial class FensExperimentSetup
 {
     const string AssetFolder = "Assets/Experiment";
     const string TargetSetPath = AssetFolder + "/TargetSet.asset";
@@ -101,6 +102,9 @@ public static class FensExperimentSetup
 
         // 4) Real walking only: no virtual locomotion, no CharacterController
         if (rm.xrOrigin != null) GetOrAdd<RealWalkingOnly>(rm.xrOrigin.gameObject, log);
+
+        // 5) Step 2: model colliders + visibility, audio, alignment, passthrough
+        SetupStep2(rm, exp, logger, feedback, log);
 
         EditorSceneManager.MarkSceneDirty(expGo.scene);
         Selection.activeGameObject = expGo;

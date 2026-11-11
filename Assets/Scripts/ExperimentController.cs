@@ -23,11 +23,12 @@ public class ExperimentController : MonoBehaviour
     public RouteManager routeManager;
     public TrialLogger logger;
     public OperatorFeedback feedback;
+    public WorldAlignment worldAlignment;
+    public ModelVisibility modelVisibility;
 
     [Header("Options")]
-    [Tooltip("At trial start, move the virtual building so the head is at the target's start point " +
-             "(temporary, until WorldAlignment exists)")]
-    public bool placePlayerOnStart = true;
+    [Tooltip("Also align automatically at every trial start (normally OFF: the operator aligns with the Align key)")]
+    public bool placePlayerOnStart = false;
 
     public TrialState State { get; private set; } = TrialState.Idle;
     public int TrialNumber { get; private set; }
@@ -43,6 +44,11 @@ public class ExperimentController : MonoBehaviour
     public int TargetCount => Targets != null ? Targets.Count : 0;
     public TargetDef CurrentTarget => Targets != null ? Targets.Get(targetIndex) : null;
     public string CurrentTargetId => CurrentTarget != null ? CurrentTarget.id : "-";
+
+    /// Aligned at all (to any target's start).
+    public bool IsAligned => worldAlignment != null && worldAlignment.IsAligned;
+    /// Aligned to the start of the currently selected target.
+    public bool IsAlignedForCurrentTarget => IsAligned && worldAlignment.AlignedTargetId == CurrentTargetId;
 
     void Start()
     {
@@ -76,6 +82,51 @@ public class ExperimentController : MonoBehaviour
     {
         if (State == TrialState.Idle) StartTrial();
         else StopTrial();
+    }
+
+    /// Align the virtual building to the start point of the selected target (only between trials).
+    public void Align()
+    {
+        if (State != TrialState.Idle)
+        {
+            Debug.LogWarning("[Experiment] Alignment is only possible while no trial is running.");
+            if (feedback != null) feedback.Reject();
+            return;
+        }
+        if (!DoAlign(CurrentTarget))
+        {
+            if (feedback != null) feedback.Reject();
+            return;
+        }
+        if (feedback != null) feedback.Confirm();
+        Changed?.Invoke();
+    }
+
+    bool DoAlign(TargetDef target)
+    {
+        if (worldAlignment == null)
+        {
+            Debug.LogError("[Experiment] No WorldAlignment. Run the menu FENS > Setup Experiment Scene.");
+            return false;
+        }
+        if (!worldAlignment.AlignTo(target, out var result)) return false;
+        if (logger != null) logger.LogAlignment(participantId, worldAlignment.AlignmentCount, result);
+        return true;
+    }
+
+    /// Hidden -> Transparent -> Visible (only between trials, so the participant never sees it change mid-trial).
+    public void CycleModelView()
+    {
+        if (State != TrialState.Idle || modelVisibility == null)
+        {
+            if (State != TrialState.Idle)
+                Debug.LogWarning("[Experiment] Model view can only be changed while no trial is running.");
+            if (feedback != null) feedback.Reject();
+            return;
+        }
+        modelVisibility.Cycle();
+        if (feedback != null) feedback.Confirm();
+        Changed?.Invoke();
     }
 
     void SelectTarget(int step)
@@ -118,17 +169,32 @@ public class ExperimentController : MonoBehaviour
             return;
         }
 
+        if (placePlayerOnStart) DoAlign(target);
+
+        bool alignedOk = IsAlignedForCurrentTarget;
+        if (!alignedOk)
+        {
+            Debug.LogWarning(IsAligned
+                ? $"[Experiment] WARNING: aligned to {worldAlignment.AlignedTargetId}, but target {target.id} is selected. Starting anyway."
+                : "[Experiment] WARNING: not aligned yet. Starting anyway.");
+        }
+
         TrialNumber++;
         Arrived = false;
-        if (placePlayerOnStart) routeManager.PlacePlayerAtStart(target);
         routeManager.BeginTrial(target, condition);
-        if (logger != null) logger.BeginTrial(participantId, TrialNumber, target.id, condition);
+        if (logger != null)
+            logger.BeginTrial(participantId, TrialNumber, target.id, condition,
+                              IsAligned ? worldAlignment.AlignedTargetId : "");
         trialStartTime = Time.time;
         State = TrialState.Running;
 
         Debug.Log($"[Experiment] Trial {TrialNumber} STARTED. Participant {participantId}, " +
                   $"target {target.id}{(target.isWarmup ? " (warm-up)" : "")}, condition {condition}");
-        if (feedback != null) feedback.Confirm();
+        if (feedback != null)
+        {
+            if (alignedOk) feedback.Confirm();
+            else feedback.Warn(); // warning beep: started without a matching alignment
+        }
         Changed?.Invoke();
     }
 

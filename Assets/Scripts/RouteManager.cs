@@ -105,30 +105,7 @@ public class RouteManager : MonoBehaviour
         StopSound();
     }
 
-    /// Moves the XR Origin so that the participant's HEAD is at the target's start point,
-    /// looking in the start direction. Only horizontal position and yaw change; the origin stays on the floor.
-    /// (Temporary stand-in until WorldAlignment is written.)
-    public void PlacePlayerAtStart(TargetDef target)
-    {
-        if (xrOrigin == null || playerHead == null || target == null || !target.IsValid) return;
-
-        // CharacterController overrides direct position changes, so pause it briefly
-        var cc = xrOrigin.GetComponent<CharacterController>();
-        bool ccWasEnabled = cc != null && cc.enabled;
-        if (ccWasEnabled) cc.enabled = false;
-
-        // 1) turn the rig around the head so the head looks in the start direction
-        float yawDelta = Mathf.DeltaAngle(playerHead.eulerAngles.y, target.startYaw);
-        xrOrigin.RotateAround(playerHead.position, Vector3.up, yawDelta);
-
-        // 2) slide the rig so the head is above the start point, rig on the floor
-        Vector3 head = playerHead.position;
-        Vector3 p = xrOrigin.position + new Vector3(target.Start.x - head.x, 0f, target.Start.z - head.z);
-        p.y = floorY;
-        xrOrigin.position = p;
-
-        if (ccWasEnabled) cc.enabled = true;
-    }
+    // (Placing the player at the start is done by WorldAlignment.)
 
     // ---------------------------------------------------------------- drawing
 
